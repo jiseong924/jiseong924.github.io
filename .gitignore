@@ -1,0 +1,9 @@
+# Jekyll 빌드 결과물 및 캐시
+_site/
+.jekyll-cache/
+.jekyll-metadata
+.sass-cache/
+
+# Bundler
+.bundle/
+vendor/
