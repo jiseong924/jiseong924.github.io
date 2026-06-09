@@ -1,12 +1,12 @@
 ---
 layout: post
 title: "멀티 NIC 서버 비대칭 라우팅 해결기: 내부망은 되는데 외부망만 안 됐던 이유"
-date: 2026-06-09 18:00:00 +0900
+date: 2026-06-09 18:19:00 +0900
 categories: [troubleshooting]
 tags: [network, linux, routing]
 ---
 
-NIC 2개짜리 Ubuntu 서버의 Tomcat이 며칠 정상 동작하다 외부망에서만 접속이 끊겼다. 내부망, 서버, 방화벽은 모두 정상이었다. 확인해 보니 원인은 애플리케이션이 아니라 라우팅이었다.
+NIC 2개짜리 Ubuntu 서버에서 외부망 접속만 안 됐다. 내부망, 서버, 방화벽은 모두 정상이었다. 확인해 보니 원인은 라우팅에 있었다.
 
 > **TL;DR**
 >
@@ -52,9 +52,7 @@ ip route get 198.51.100.20
 
 원인은 `ip route`의 metric이었다. default 경로가 2개인데 내부망(metric 100)이 외부망(metric 101)보다 낮았다. metric은 값이 낮을수록 우선이므로 외부로 나갈 트래픽이 내부망 게이트웨이를 타고 있었다.
 
-그럼 처음엔 왜 됐을까. 내부망 통신은 `10.0.0.0/16` 전용 경로를 타므로 default 우선순위와 무관하다. default 경로 경쟁은 외부 트래픽에서만 발생한다. 이 서버는 NetworkManager로 관리되고 있었는데, NetworkManager는 이더넷 NIC가 둘이면 먼저 활성화된 연결에 metric 100, 다음 연결에 101을 부여한다(배포판과 무관한 NetworkManager 공통 동작). 처음엔 외부망이 먼저 올라와 100을 받아 정상이었는데, 재부팅이나 DHCP 갱신, 인터페이스 재연결로 활성화 순서가 바뀌면서 내부망이 100을 받아 우선순위가 통째로 뒤집힌 것이다.
-
-참고로 Ubuntu Server는 기본적으로 systemd-networkd를 쓴다. NetworkManager를 쓰지 않는 환경이라면 metric은 netplan/networkd 설정을 따른다.
+이 서버는 NetworkManager로 관리되고 있었는데, NetworkManager는 metric을 따로 지정하지 않으면 NIC에 metric 100, 101을 자동으로 부여한다. 이 값이 내부망에 더 낮게 잡혀 있었던 것이다. 별도 세팅 없이 NIC를 여러 개 두면 이렇게 외부망 응답이 내부망으로 새는 문제가 생길 수 있다.
 
 ## 3. 해결 방법
 
