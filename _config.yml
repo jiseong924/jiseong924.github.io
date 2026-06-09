@@ -1,16 +1,11 @@
 # 블로그 기본 설정
 title: JS Engineering Notes
-description: JS(자바스크립트아님) Engineering Notes
+description: JS Engineering Notes
 baseurl: ""
 url: "https://jiseong924.github.io"
 
 # 테마
 theme: minima
-
-# 작성자
-author:
-  name: Jiseong Kim
-  email: rlawltjd924@naver.com
 
 # 시간대
 timezone: Asia/Seoul
