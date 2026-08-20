@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "재부팅 후 사이트가 안 열렸다: 범인은 롤백된 default route였다"
-date: 2026-08-20 18:00:00 +0900
+date: 2026-08-20 18:22:49 +0900
 categories: [troubleshooting]
 tags: [network, linux, netplan, cloud-init, routing]
 ---
@@ -108,15 +108,7 @@ curl -s ifconfig.me
 # X.X.X.184                                       ← DNS와 일치
 ```
 
-## 4. 회고
-
-증상은 위에서 보이는데 원인은 아래에 있었다. 서비스 계층을 위에서만 훑는 습관이 이번 시간 낭비의 대부분을 만들었다. 서버 안이 다 정상이면 다음은 서버가 세상에 어떤 IP로 나가는지 확인할 차례다.
-
-"수동으로 고쳤다"는 영속성을 보장하지 않는다는 것도 다시 확인했다. `ip route`는 커널 테이블만 바꾸는 휘발성 조치고, cloud-init 관리 하의 파일 수정도 결국 휘발성이다. 재부팅으로 검증하지 않았다면 고쳤다고 말할 수 없다. 이번 장애의 진짜 원인은 정전이 아니라, 몇 달 전에 재부팅 없이 끝낸 그 작업이었다.
-
-남은 과제는 두 가지다. 게이트웨이 `10.1.1.1`(일반망)과 `10.1.1.2`(DMZ·NAT망)의 역할 구분을 팀 문서에 명시하는 것, 그리고 온프레미스 NAT/라우팅 구간이 재부팅 한 번에 서비스 전체를 내리는 SPOF라는 점이다. 후자는 클라우드로 옮기면 보안그룹과 라우팅 테이블로 코드화되면서 상당 부분 해소될 영역이다.
-
-## 5. 참고 자료
+## 4. 참고 자료
 
 - [`netplan` 설정 레퍼런스](https://netplan.readthedocs.io/en/stable/netplan-yaml/) — `routes`, `to: default`
 - [`netplan try`](https://netplan.readthedocs.io/en/stable/netplan-try/) — 자동 롤백 동작
