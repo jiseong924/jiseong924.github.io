@@ -98,7 +98,7 @@ network:
 # /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
 ```
 
-### 검증
+### 재부팅 후 검증
 
 ```bash
 ip route show default
