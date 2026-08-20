@@ -43,11 +43,17 @@ ip route show default
 # default via 10.1.1.1 dev enp4s0   ← .2여야 하는데 롤백됨
 ```
 
-과거에 누군가 게이트웨이를 `.2`로 바꾼 이력이 있었다. 그런데 그게 `ip route` 런타임 명령이었거나, `50-cloud-init.yaml`을 고쳤지만 cloud-init을 비활성화하지 않은 상태였다. 어느 쪽이든 재부팅하면 원래 설정으로 되돌아간다.
+과거에 게이트웨이를 `.2`로 바꿔 둔 이력이 있었다. 문제는 그게 `ip route`로 준 런타임 명령이었다는 점이다.
+
+```bash
+sudo ip route replace default via 10.1.1.2 dev enp4s0
+```
+
+이 방식은 커널 라우팅 테이블만 그 자리에서 바꾼다. `/etc/netplan` 아래 설정 파일은 그대로이므로 재부팅하면 원래 값인 `.1`로 되돌아간다. 그동안은 서버를 끌 일이 없어서 몇 달간 정상으로 보였고, 정전으로 처음 재부팅되면서 드러났다.
 
 ## 3. 해결
 
-`ip route`로 런타임만 고치면 다음 재부팅에 또 되돌아간다. cloud-init의 네트워크 관리를 끄고 `50-cloud-init.yaml`을 직접 수정했다.
+같은 실수를 반복하지 않으려면 설정 파일을 고쳐야 한다. cloud-init의 네트워크 관리를 끄고 `50-cloud-init.yaml`을 직접 수정했다. 이 파일은 cloud-init이 매 부팅마다 재생성하므로, 비활성화를 빼면 파일을 고쳐도 똑같이 원복된다.
 
 ```bash
 # 1) cloud-init의 네트워크 관리 차단 (이걸 빼면 재부팅 시 원복)
@@ -61,7 +67,7 @@ sudo nano /etc/netplan/50-cloud-init.yaml   # via: 10.1.1.1 → 10.1.1.2
 # 3) 문법 검증 (출력이 없어야 정상)
 sudo netplan generate
 
-# 4) 적용 — apply 아님, try
+# 4) 적용
 sudo netplan try
 ```
 
@@ -69,18 +75,18 @@ sudo netplan try
 
 ```yaml
 network:
-    version: 2
-    ethernets:
-        enp4s0:
-            addresses:
-              - 10.1.1.141/20
-            nameservers:
-                addresses:
-                  - 10.1.1.11
-                search: []
-            routes:
-              - to: default
-                via: 10.1.1.2
+  version: 2
+  ethernets:
+    enp4s0:
+      addresses:
+        - 10.1.1.141/20
+      nameservers:
+        addresses:
+          - 10.1.1.11
+        search: []
+      routes:
+        - to: default
+          via: 10.1.1.2
 ```
 
 민망한 건, 답이 이미 그 파일 맨 위 주석에 적혀 있었다는 점이다.
@@ -102,23 +108,15 @@ curl -s ifconfig.me
 # X.X.X.184                                       ← DNS와 일치
 ```
 
-## 4. netplan 관련해서 알게 된 것들
-
-- **`netplan try` vs `apply`**: SSH 원격 작업이면 반드시 `try`. 120초 안에 Enter로 확정하지 않으면 자동 롤백되어 접속 유실을 막아준다. 반대로 Enter를 안 누르면 적용도 안 된다. 이것 때문에 한 번 헛돌았다.
-- **`netplan get routes`가 `null`인 건 정상**: 최상위 `network.routes`를 조회하는 명령이다. 인터페이스 하위 route는 `netplan get ethernets.enp4s0.routes`로 봐야 한다.
-- **`WARNING:root:Cannot call Open vSwitch`**: OVS를 안 쓰는 환경에서 나오는 정상 메시지다. 무시해도 된다.
-- **netplan 파일 권한**: `chmod 600`을 안 하면 경고가 뜬다.
-- **`gateway4`와 `routes: to: default` 동시 선언 금지**: `Conflicting default route declarations` 에러가 난다. 게이트웨이는 한 곳에만 적는다.
-
-## 5. 회고
+## 4. 회고
 
 증상은 위에서 보이는데 원인은 아래에 있었다. 서비스 계층을 위에서만 훑는 습관이 이번 시간 낭비의 대부분을 만들었다. 서버 안이 다 정상이면 다음은 서버가 세상에 어떤 IP로 나가는지 확인할 차례다.
 
-"수동으로 고쳤다"는 영속성을 보장하지 않는다는 것도 다시 확인했다. `ip route`는 휘발성이고, cloud-init 관리 하의 파일 수정도 결국 휘발성이다. 재부팅으로 검증하지 않았다면 고쳤다고 말할 수 없다.
+"수동으로 고쳤다"는 영속성을 보장하지 않는다는 것도 다시 확인했다. `ip route`는 커널 테이블만 바꾸는 휘발성 조치고, cloud-init 관리 하의 파일 수정도 결국 휘발성이다. 재부팅으로 검증하지 않았다면 고쳤다고 말할 수 없다. 이번 장애의 진짜 원인은 정전이 아니라, 몇 달 전에 재부팅 없이 끝낸 그 작업이었다.
 
 남은 과제는 두 가지다. 게이트웨이 `10.1.1.1`(일반망)과 `10.1.1.2`(DMZ·NAT망)의 역할 구분을 팀 문서에 명시하는 것, 그리고 온프레미스 NAT/라우팅 구간이 재부팅 한 번에 서비스 전체를 내리는 SPOF라는 점이다. 후자는 클라우드로 옮기면 보안그룹과 라우팅 테이블로 코드화되면서 상당 부분 해소될 영역이다.
 
-## 6. 참고 자료
+## 5. 참고 자료
 
 - [`netplan` 설정 레퍼런스](https://netplan.readthedocs.io/en/stable/netplan-yaml/) — `routes`, `to: default`
 - [`netplan try`](https://netplan.readthedocs.io/en/stable/netplan-try/) — 자동 롤백 동작
